@@ -18,7 +18,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5174",
         "http://127.0.0.1:5174",
-        "https://nba-frontend-beta.vercel.app"
+        "https://nba-frontend-beta.vercel.app",
+        "https://nba-frontend-phihjxjkm-markamiris-projects.vercel.app",
+
     ],
     allow_credentials=True,
     allow_methods=["*"],
