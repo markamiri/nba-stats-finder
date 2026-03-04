@@ -5,8 +5,7 @@ ALL_PLAYERS = players.get_players()
 
 ACTIVE_PLAYERS = [p for p in ALL_PLAYERS if p["is_active"]]
 
-PLAYER_NAMES = [p["full_name"] for p in ACTIVE_PLAYERS]
-
+PLAYER_NAMES = [p["full_name"].lower() for p in ACTIVE_PLAYERS]
 
 def extract_player_name(user_query: str) -> str:
     words = user_query.lower().split()
@@ -21,7 +20,7 @@ def extract_player_name(user_query: str) -> str:
         match, score, _ = process.extractOne(
             candidate,
             PLAYER_NAMES,
-            scorer=fuzz.token_set_ratio
+            scorer=fuzz.WRatio
         )
 
         if score > best_score:
@@ -29,7 +28,7 @@ def extract_player_name(user_query: str) -> str:
             best_score = score
 
     # If strong 2-word match found, return immediately
-    if best_score >= 75:
+    if best_score >= 70:
         return best_match
 
     # ---- FALLBACK TO SINGLE WORD (STRICTER THRESHOLD) ----
@@ -47,6 +46,4 @@ def extract_player_name(user_query: str) -> str:
     if best_score >= 85:  # stricter for single words
         return best_match
 
-    raise Exception(
-        f"No confident player match found. Best guess: {best_match} ({best_score})"
-    )
+ 
