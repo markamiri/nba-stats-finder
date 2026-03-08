@@ -89,9 +89,9 @@ with engine.begin() as conn:
 
         row_result = result.fetchone()
 
-        if row_result.inserted:
+        if row_result and row_result.inserted:
             new_players += 1
-            
+
 logger.info(f"New players added: {new_players}")
 
 # ----------------------------
