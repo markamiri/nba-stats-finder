@@ -67,7 +67,7 @@ new_players = 0
 
 with engine.begin() as conn:
     for _, row in players_df.iterrows():
-       result = conn.execute(text("""
+        result = conn.execute(text("""
             INSERT INTO players (
                 player_id,
                 player_name,
@@ -86,11 +86,12 @@ with engine.begin() as conn:
                 team_name = EXCLUDED.team_name
             RETURNING xmax = 0 AS inserted
         """), row.to_dict())
-    row_result = result.fetchone()
 
-    if row_result.inserted:
-        new_players += 1
+        row_result = result.fetchone()
 
+        if row_result.inserted:
+            new_players += 1
+            
 logger.info(f"New players added: {new_players}")
 
 # ----------------------------
