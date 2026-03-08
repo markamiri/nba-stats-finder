@@ -1,16 +1,23 @@
 # app.py
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
+from sqlalchemy import text
+
 from query_logger import log_query
 from player_parser import extract_player_name
 from team_parser import extract_team
-from data_loader import load_player_games
-from database import create_connection, load_dataframe_to_db, execute_query
+from database import create_connection, execute_query
 from llm import generate_sql
 from validator import validate_sql
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import HTTPException
+import numpy as np
+import pandas as pd
+
+
+
+
 app = FastAPI()
 
 app.add_middleware(
@@ -26,9 +33,11 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     query: str
 
+
 @app.get("/")
 def root():
     return {"status": "API is running"}
+
 
 @app.post("/query")
 def handle_query(request: QueryRequest):
@@ -43,7 +52,7 @@ def handle_query(request: QueryRequest):
 
     try:
 
-        # -------- extraction stage --------
+        # -------- entity extraction --------
         stage = "entity_extraction"
 
         player_name = extract_player_name(user_query)
@@ -52,18 +61,50 @@ def handle_query(request: QueryRequest):
         if not player_name:
             raise HTTPException(status_code=400, detail="Player could not be extracted")
 
-        # -------- data loading --------
-        stage = "load_player_games"
-
-        df = load_player_games(player_name)
+        # -------- database connection --------
+        stage = "database_connection"
 
         conn = create_connection()
-        load_dataframe_to_db(df, conn)
+
+        # -------- find player_id --------
+        stage = "player_lookup"
+
+        player_lookup_sql = """
+        SELECT player_id
+        FROM players
+        WHERE LOWER(player_name) = LOWER(:player_name)
+        LIMIT 1
+        """
+
+        result = conn.execute(
+            text(player_lookup_sql),
+            {"player_name": player_name}
+        ).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Player not found")
+
+        player_id = result[0]
 
         # -------- SQL generation --------
         stage = "sql_generation"
 
-        sql_query = generate_sql(user_query, team_abbr)
+        DEFAULT_COLUMNS = """
+        "TEAM_ABBREVIATION",
+        "GAME_DATE","MATCHUP","WL",
+        "MIN","FGM","FGA","FG_PCT","FG3M","FG3A","FG3_PCT",
+        "FTM","FTA","FT_PCT","OREB","DREB","REB",
+        "AST","STL","BLK","TOV","PF","PTS","PLUS_MINUS"
+        """
+
+        sql_query = generate_sql(user_query, player_id, team_abbr)
+
+        sql_query = f"""
+        SELECT {DEFAULT_COLUMNS}
+        FROM player_game_logs
+        WHERE "PLAYER_ID" = {player_id}
+        {sql_query}
+        """
 
         # -------- SQL validation --------
         stage = "sql_validation"
@@ -84,6 +125,15 @@ def handle_query(request: QueryRequest):
             result_df=result_df,
             success=True
         )
+
+        for col in ["FG_PCT", "FG3_PCT", "FT_PCT"]:
+            if col in result_df.columns:
+                result_df[col] = result_df[col].apply(
+                    lambda x: f"{round(x * 100, 1)}%" if pd.notna(x) else None
+                )
+
+        result_df = result_df.replace({np.nan: None})
+
 
         return {
             "player": player_name,

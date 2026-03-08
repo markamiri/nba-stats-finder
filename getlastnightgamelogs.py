@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
+# might need to setup headers
+
 print(os.getenv("NEON_PLAYER_DATABASE"))
 # ----------------------------
 # Logging Setup

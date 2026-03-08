@@ -1,16 +1,21 @@
-# database.py
-
-import sqlite3
+from sqlalchemy import create_engine
+import os
 import pandas as pd
+from dotenv import load_dotenv
 
+load_dotenv()
 
+DATABASE_URL = os.getenv("NEON_PLAYER_DATABASE")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True
+)
 def create_connection():
-    return sqlite3.connect(":memory:")
+    return engine.connect()
 
 
-def load_dataframe_to_db(df: pd.DataFrame, conn):
-    df.to_sql("games", conn, index=False, if_exists="replace")
-
-
-def execute_query(conn, query: str) -> pd.DataFrame:
-    return pd.read_sql(query, conn)
+def execute_query(conn, sql_query):
+    return pd.read_sql(sql_query, conn)

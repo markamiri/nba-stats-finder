@@ -16,7 +16,7 @@ def log_query(
     result_json = None
 
     if result_df is not None:
-        result_json = result_df.to_dict(orient="records")
+        result_json = result_df.replace({float("nan"): None}).to_json(orient="records")
 
     with engine.connect() as conn:
 
