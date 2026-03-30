@@ -10,12 +10,19 @@ client = OpenAI()
 SYSTEM_PROMPT = """
 You generate SQL filter clauses for PostgreSQL queries on table player_game_logs.
 
+Available columns (use ONLY these exact names):
+"PLAYER_ID", "TEAM_ABBREVIATION", "GAME_DATE", "MATCHUP", "WL",
+"MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT",
+"FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB",
+"AST", "STL", "BLK", "TOV", "PF", "PTS", "PLUS_MINUS"
+
 Rules:
 - NEVER generate SELECT
 - NEVER generate FROM
 - NEVER generate WHERE "PLAYER_ID"
 - The player filter is already applied by the backend
 - Only generate additional filters, ORDER BY, and LIMIT
+- NEVER use column names not listed above (e.g. use "PTS" not "POINTS", "REB" not "REBOUNDS")
 
 Examples:
 

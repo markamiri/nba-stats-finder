@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import text
+import os
 
 from query_logger import log_query
 from player_parser import extract_player_name
@@ -14,6 +15,8 @@ from llm import generate_sql
 from validator import validate_sql
 import numpy as np
 import pandas as pd
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 
 
 
@@ -66,55 +69,59 @@ def handle_query(request: QueryRequest):
 
         conn = create_connection()
 
-        # -------- find player_id --------
-        stage = "player_lookup"
+        try:
+            # -------- find player_id --------
+            stage = "player_lookup"
 
-        player_lookup_sql = """
-        SELECT player_id
-        FROM players
-        WHERE LOWER(player_name) = LOWER(:player_name)
-        LIMIT 1
-        """
+            player_lookup_sql = """
+            SELECT player_id
+            FROM players
+            WHERE LOWER(player_name) = LOWER(:player_name)
+            LIMIT 1
+            """
 
-        result = conn.execute(
-            text(player_lookup_sql),
-            {"player_name": player_name}
-        ).fetchone()
+            result = conn.execute(
+                text(player_lookup_sql),
+                {"player_name": player_name}
+            ).fetchone()
 
-        if not result:
-            raise HTTPException(status_code=404, detail="Player not found")
+            if not result:
+                raise HTTPException(status_code=404, detail="Player not found")
 
-        player_id = result[0]
+            player_id = result[0]
 
-        # -------- SQL generation --------
-        stage = "sql_generation"
+            # -------- SQL generation --------
+            stage = "sql_generation"
 
-        DEFAULT_COLUMNS = """
-        "TEAM_ABBREVIATION",
-        "GAME_DATE","MATCHUP","WL",
-        "MIN","FGM","FGA","FG_PCT","FG3M","FG3A","FG3_PCT",
-        "FTM","FTA","FT_PCT","OREB","DREB","REB",
-        "AST","STL","BLK","TOV","PF","PTS","PLUS_MINUS"
-        """
+            DEFAULT_COLUMNS = """
+            "TEAM_ABBREVIATION",
+            "GAME_DATE","MATCHUP","WL",
+            "MIN","FGM","FGA","FG_PCT","FG3M","FG3A","FG3_PCT",
+            "FTM","FTA","FT_PCT","OREB","DREB","REB",
+            "AST","STL","BLK","TOV","PF","PTS","PLUS_MINUS"
+            """
 
-        sql_query = generate_sql(user_query, player_id, team_abbr)
+            sql_query = generate_sql(user_query, player_id, team_abbr)
 
-        sql_query = f"""
-        SELECT {DEFAULT_COLUMNS}
-        FROM player_game_logs
-        WHERE "PLAYER_ID" = {player_id}
-        {sql_query}
-        """
+            sql_query = f"""
+            SELECT {DEFAULT_COLUMNS}
+            FROM player_game_logs
+            WHERE "PLAYER_ID" = {player_id}
+            {sql_query}
+            """
 
-        # -------- SQL validation --------
-        stage = "sql_validation"
+            # -------- SQL validation --------
+            stage = "sql_validation"
 
-        validate_sql(sql_query)
+            validate_sql(sql_query)
 
-        # -------- SQL execution --------
-        stage = "sql_execution"
+            # -------- SQL execution --------
+            stage = "sql_execution"
 
-        result_df = execute_query(conn, sql_query)
+            result_df = execute_query(conn, sql_query)
+
+        finally:
+            conn.close()
 
         # -------- success logging --------
         log_query(
@@ -134,9 +141,11 @@ def handle_query(request: QueryRequest):
 
         result_df = result_df.replace({np.nan: None})
 
+        headshot_url = f"{SUPABASE_URL}/storage/v1/object/public/NBA%20headshots/{player_id}.png"
 
         return {
             "player": player_name,
+            "headshot": headshot_url,
             "sql": sql_query,
             "results": result_df.to_dict(orient="records")
         }
